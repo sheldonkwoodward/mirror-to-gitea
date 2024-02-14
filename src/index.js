@@ -3,7 +3,7 @@ const request = require('superagent');
 const {default: PQueue} = require('p-queue');
 
 
-async function getGithubRepositories(username, token, mirrorPrivateRepositories) {
+async function getGithubOwnedRepositories(username, token, mirrorPrivateRepositories) {
   const octokit = new Octokit({
     auth: token || null,
   });
@@ -22,6 +22,18 @@ async function getGithubRepositories(username, token, mirrorPrivateRepositories)
   }else{
     return publicRepositoriesWithForks;
   }
+}
+
+async function getGithubStarredRepositories(username, token, mirrorPrivateRepositories) {
+  const octokit = new Octokit({
+    auth: token || null,
+  });
+  
+  const publicRepositoriesWithForks = await octokit.paginate(octokit.rest.activity.listReposStarredByAuthenticatedUser, { username: username })
+      .then(repositories => toRepositoryList(repositories));
+
+  console.log(publicRepositoriesWithForks);
+  return publicRepositoriesWithForks;
 }
 
 function toRepositoryList(repositories) {
@@ -117,9 +129,23 @@ async function main() {
     return;
   }
 
+  let githubRepositories;
+  
+  const mirrorOwnedRepositories = process.env.MIRROR_OWNED_REPOSITORIES
+  if (mirrorOwnedRepositories === 'true') {
+    githubRepositories = await getGithubOwnedRepositories(githubUsername, githubToken, mirrorPrivateRepositories);
+    console.log(`Found ${githubRepositories.length} repositories owned by ${githubUsername} on github`);
+  } else {
+    console.log('Skip mirroring user owned repositories');
+  }
 
-  const githubRepositories = await getGithubRepositories(githubUsername, githubToken, mirrorPrivateRepositories);
-  console.log(`Found ${githubRepositories.length} repositories on github`);
+  const mirrorStarredRepositories = process.env.MIRROR_STARRED_REPOSITORIES
+  if (mirrorStarredRepositories === 'true') {
+    githubRepositories = await getGithubStarredRepositories(githubUsername, githubToken, mirrorPrivateRepositories);
+    console.log(`Found ${githubRepositories.length} repositories starred by ${githubUsername} on github`);
+  } else {
+    console.log('Skip mirroring user starred repositories');
+  }
 
   const gitea = {
     url: giteaUrl,
